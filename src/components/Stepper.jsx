@@ -120,7 +120,7 @@ const Stepper = () => {
   };
 
   // ==========================================
-  // RENDERIZAÇÃO VISUAL (HTML/JSX) Mudei aqui 
+  // RENDERIZAÇÃO VISUAL (HTML/JSX) Mudei 
 
   // ==========================================
   return (
