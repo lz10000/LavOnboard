@@ -1,0 +1,58 @@
+# Versão da especificação do Docker Compose
+version: '3.8'
+
+# Bloco que declara todos os serviços (contêineres)
+services:
+  # Serviço 1: Banco de Dados PostgreSQL
+  db:
+    # Imagem baseada no Alpine (muito leve)
+    image: postgres:15-alpine
+    # Nome amigável do contêiner
+    container_name: iot_postgres
+    # Reinicia o contêiner automaticamente em caso de falha
+    restart: always
+    environment:
+      # Cria o superusuário padrão do banco
+      POSTGRES_USER: admin
+      # Define a senha do banco
+      POSTGRES_PASSWORD: password123
+      # Cria a base de dados automaticamente
+      POSTGRES_DB: iot_simulator
+    ports:
+      # Mapeia a porta interna 5432 para a porta externa 5432 (sua máquina)
+      - "5432:5432"
+    volumes:
+      # Mapeia o volume persistente para não perder os dados salvos
+      - pgdata:/var/lib/postgresql/data
+
+  # Serviço 2: API Mock Node.js
+  simulator-api:
+    build: 
+      # Constrói a imagem baseada no Dockerfile dentro da pasta simulator
+      context: ./simulator
+    # Nome amigável do contêiner
+    container_name: iot_simulator_api
+    # Reinicia automaticamente
+    restart: always
+    ports:
+      # Mapeia a porta da API para acesso pelo React
+      - "3001:3001"
+    environment:
+      # Conecta usando o nome do serviço 'db' como host
+      - DB_HOST=db
+      - DB_USER=admin
+      - DB_PASSWORD=password123
+      - DB_NAME=iot_simulator
+      - PORT=3001
+    depends_on:
+      # Garante que a API só inicie depois que o Banco de Dados estiver pronto
+      - db
+    volumes:
+      # Sincroniza o código local com o contêiner para o nodemon funcionar
+      - ./simulator:/usr/src/app
+      # Isola os node_modules do contêiner para não dar conflito com o Windows
+      - /usr/src/app/node_modules
+
+# Declaração dos volumes físicos persistentes
+volumes:
+  pgdata:
