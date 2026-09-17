@@ -1,4 +1,4 @@
-giimport React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const Stepper = () => {
   // ==========================================
@@ -120,7 +120,8 @@ const Stepper = () => {
   };
 
   // ==========================================
-  // RENDERIZAÇÃO VISUAL (HTML/JSX) Mudei 
+  // RENDERIZAÇÃO VISUAL (HTML/JSX) Mudei pela 3 vez
+
 
   // ==========================================
   return (
