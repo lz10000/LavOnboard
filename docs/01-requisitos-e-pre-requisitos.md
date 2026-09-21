@@ -27,6 +27,7 @@ Estas informações foram extraídas do Plano de Ação do projeto:
 - A comunicação entre portal/API e controladora é feita pelo protocolo HTTP.
 - Há dois indicadores físicos: LED laranja (controladora ligada) e LED verde (comunicação estabelecida).
 - A integração de produção troca JSON com uma API hospedada no Azure e documentada por Swagger/OpenAPI. O protótipo acadêmico deve simular esse contrato, sem utilizar credenciais reais.
+- A resposta JSON da integração é fixa e contém somente três informações: solicitação de pulso, solicitação de reinicialização e disponibilidade da máquina. O portal não pode acrescentar campos a essa resposta.
 - A recomendação operacional de conexão é 10 Mbps. O portal deve indicar **reprovada** abaixo de 5 Mbps, **adequada** entre 5 e menos de 10 Mbps, e **recomendada** a partir de 10 Mbps.
 - O fluxo esperado aborda identificação do equipamento, conexão física orientada, rede Wi-Fi e validação lógica.
 
@@ -37,7 +38,7 @@ Estas informações foram extraídas do Plano de Ação do projeto:
 | Cliente/franqueado | Executa o passo a passo da sua instalação. | Informa nome, franquia e lavanderia; inicia a validação e consulta o dispositivo pelo MAC. |
 | Técnico homologado | Instala previamente hardware e cabos. | Fora do portal no MVP, salvo se o grupo decidir criar tela de preparação. |
 | Suporte | Atua quando o roteiro não resolve. | Consulta de tentativas e orientações de diagnóstico — opcional no MVP. |
-| Simulador IoT | Representa a controladora enviando telemetria. | Informa estado de conexão e LEDs à API. |
+| Simulador IoT | Representa a resposta da integração da controladora. | Retorna o contrato JSON fixo à API. |
 
 ## 4. Fluxo funcional proposto
 
@@ -45,10 +46,9 @@ Estas informações foram extraídas do Plano de Ação do projeto:
 2. Preenche nome, franquia e nome da lavanderia.
 3. Informa o MAC manualmente ou o lê pelo QR Code correspondente.
 4. O portal explica a ligação do cabo Micro-Fit de seis vias à interface de moedeiro, inclusive o pulso de ativação e o sinal de máquina ocupada, com conteúdo visual aprovado e aviso de segurança.
-5. O portal consulta via HTTP o status da controladora e exibe os estados esperados: ligada (LED laranja) e comunicação estabelecida (LED verde).
-6. O usuário inicia o teste de conexão. O portal verifica a conexão com internet através de um download e upload e calcula sua velocidade através do tempo de execução. 
-7. O portal mostra o resultado, a próxima ação e grava o log associado ao MAC e à unidade informada.
-8. O portal verá através de uma simulação correspondente a API do portal da empresa.
+5. O portal consulta via HTTP a simulação equivalente à API da empresa e recebe o JSON estabelecido para a controladora.
+6. O usuário inicia o teste de conexão no celular, conectado à mesma rede da controladora. O portal mede download e upload pelo tempo de execução de transferências de teste.
+7. O portal interpreta o JSON e o teste de velocidade, mostra o resultado e grava o log associado ao MAC e à unidade informada.
 8. Em falha, o resultado fica disponível no banco interno para análise pelo suporte.
 
 ## 5. Requisitos funcionais (rascunho para validação)
@@ -59,17 +59,17 @@ Estas informações foram extraídas do Plano de Ação do projeto:
 | RF-02 | Coletar os dados da unidade. | Antes da validação, o usuário informa nome, franquia e nome da lavanderia. |
 | RF-03 | Identificar a controladora por MAC. | Sistema aceita MAC válido digitado ou extraído do QR Code e informa quando não há dispositivo disponível. |
 | RF-04 | Orientar a conexão com a máquina. | Portal explica em linguagem simples a conexão Micro-Fit de seis vias e os sinais de pulso de ativação/ocupação, sem instruções elétricas não autorizadas. O usuário deve somente conferir se a ligação está correta|
-| RF-05 | Consultar o estado atual via HTTP. | A interface apresenta carregamento e recebe da API JSON `online` ou `offline`, mais os estados dos LEDs. |
-| RF-06 | Exibir indicadores físicos. | O resultado informa LED laranja (energia) e LED verde (comunicação) de forma textual e acessível, não apenas por cor. |
-| RF-07 | Executar teste de conexão. | O sistema registra a velocidade em Mbps e classifica como reprovada abaixo de 5 Mbps, adequada entre 5 e menos de 10 Mbps, e recomendada a partir de 10 Mbps. |
-| RF-08 | Registrar telemetria e log da validação. | O banco recebe MAC, dados da unidade, resultado, LEDs, métricas, data/hora e motivo de falha, sem senha de Wi-Fi. |
+| RF-05 | Consultar o estado atual via HTTP. | A interface apresenta carregamento e recebe exatamente a resposta JSON estabelecida pela API, sem adicionar campos. Falha HTTP, timeout ou JSON inválido indicam que não foi possível confirmar comunicação. |
+| RF-06 | Coletar a conferência dos indicadores físicos. | O usuário informa no formulário se o LED laranja (energia) e o LED verde (comunicação) estão acesos. O portal explica os dois indicadores em texto acessível. |
+| RF-07 | Executar teste de conexão no dispositivo do cliente. | Com o celular conectado à mesma rede da controladora, o sistema mede download e upload em Mbps e classifica ambos como reprovados abaixo de 5 Mbps, adequados entre 5 e menos de 10 Mbps e recomendados a partir de 10 Mbps. |
+| RF-08 | Registrar resultado e log da validação. | O banco recebe MAC, dados da unidade, valores da resposta JSON, métricas de download/upload, resultado, motivo de falha e data/hora, sem senha de Wi-Fi. |
 | RF-09 | Exibir orientação após o teste. | Sucesso encerra o onboarding; falha orienta o usuário e permanece disponível ao suporte no banco interno. |
 
 ## 6. Requisitos não funcionais
 
 | ID | Requisito |
 | --- | --- |
-| RNF-01 | A interface deve funcionar em desktop e celular nas larguras definidas pelo grupo. |
+| RNF-01 | A interface deve funcionar no Google Chrome para celular, com validação no viewport do iPhone 14 (390 × 844 px). |
 | RNF-02 | O fluxo deve ser utilizável por teclado, ter foco visível, contraste adequado, rótulos em campos e mensagens anunciáveis por leitor de tela. Usar WCAG 2.2 AA como referência. |
 | RNF-03 | A API deve responder em JSON e usar códigos HTTP coerentes; erros não podem expor stack trace ou segredos. |
 | RNF-04 | Configurações e segredos ficam em variáveis de ambiente, nunca versionados. Para o protótipo, usar apenas valores locais não sensíveis. |
@@ -80,9 +80,12 @@ Estas informações foram extraídas do Plano de Ação do projeto:
 ## 7. Regras de negócio iniciais
 
 - O MAC é o identificador único da controladora. Um QR Code só facilita sua captura e não cria outro identificador.
-- O estado da controladora é determinado pela resposta HTTP mais recente obtida dela ou recebida pelo simulador.
-- Uma validação só é bem-sucedida quando a controladora está `ONLINE`, o LED de energia está `ON` (laranja), o LED de comunicação está `ON` (verde) e a velocidade de conexão é maior ou igual a 5 Mbps.
-- A classificação de velocidade é: `REPROVADA` abaixo de 5 Mbps; `ADEQUADA` de 5 Mbps até menos de 10 Mbps; `RECOMENDADA` a partir de 10 Mbps.
+- O resultado de conectividade é confirmado quando a consulta HTTP retorna com sucesso uma resposta JSON válida. Falha HTTP, timeout ou JSON inválido significam que a comunicação não pôde ser confirmada.
+- Uma validação é concluída com êxito quando a comunicação é confirmada, o usuário confirma os LEDs laranja e verde acesos, a resposta não indica reinicialização pendente e download e upload são maiores ou iguais a 5 Mbps.
+- A classificação de velocidade é aplicada separadamente a download e upload: `REPROVADA` abaixo de 5 Mbps; `ADEQUADA` de 5 Mbps até menos de 10 Mbps; `RECOMENDADA` a partir de 10 Mbps.
+- Quando a resposta indicar pulso pendente, o portal registra a informação e informa que existe uma ação operacional associada à máquina, sem enviar nem executar comandos.
+- Quando a resposta indicar reinicialização pendente, o portal informa que a controladora está reiniciando, registra o evento e aguarda nova consulta antes de concluir o onboarding.
+- A disponibilidade recebida define a mensagem da máquina: disponível para uso ou ocupada. Ela não altera o resultado do teste de velocidade.
 - Quando não houver comunicação válida, o portal deve informar que a controladora está offline ou reconectando e orientar o cliente a aguardar ou acionar o suporte.
 - A controladora verifica a comunicação com os canais de lavadora e secadora a cada 5 segundos. Os estados de sincronização são atualizados a cada 500 milissegundos.
 - Depois de 7 falhas de conectividade, a controladora inicia uma nova tentativa de conexão. Depois de 13 falhas acumuladas, ela apaga os indicadores e reinicia. O simulador deve reproduzir os estados `RECONECTANDO`, `OFFLINE` e `REINICIANDO` para esses cenários.
@@ -133,9 +136,9 @@ Não deixar SQL, regra de sucesso e detalhes de HTTP no mesmo arquivo. O control
 
 | Entidade | Campos principais |
 | --- | --- |
-| `controllers` | `id`, `mac_address`, `model`, `connection_status`, `power_led`, `communication_led`, `last_seen_at`, `created_at`, `updated_at` |
-| `telemetry_events` | `id`, `controller_id`, `connection_status`, `power_led`, `communication_led`, `received_at` |
-| `onboarding_attempts` | `id`, `controller_id`, `customer_name`, `franchise_name`, `laundry_name`, `result`, `failure_reason`, `latency_ms`, `download_mbps`, `upload_mbps`, `created_at` |
+| `controllers` | `id`, `mac_address`, `model`, `last_seen_at`, `created_at`, `updated_at` |
+| `telemetry_events` | `id`, `controller_id`, `pulse_requested`, `reboot_requested`, `machine_available`, `received_at` |
+| `onboarding_attempts` | `id`, `controller_id`, `customer_name`, `franchise_name`, `laundry_name`, `power_led_confirmed`, `communication_led_confirmed`, `pulse_requested`, `reboot_requested`, `machine_available`, `result`, `failure_reason`, `download_mbps`, `upload_mbps`, `created_at` |
 
 Para o MVP, `controllers` e `onboarding_attempts` já demonstram o necessário. `telemetry_events` é recomendado se o grupo quiser mostrar histórico.
 
@@ -143,19 +146,20 @@ Para o MVP, `controllers` e `onboarding_attempts` já demonstram o necessário. 
 
 | Método e rota | Finalidade | Resposta principal |
 | --- | --- | --- |
-| `POST /api/v1/simulator/controllers/:mac/telemetry` | Simular resposta/telemetria HTTP no formato JSON da integração Azure. | Controladora atualizada (`200`). |
-| `GET /api/v1/controllers/:mac/status` | Consultar estado calculado para onboarding. | Estado, LEDs, atualização e próxima ação (`200`). |
+| `GET /api/v1/controllers/:mac/status` | Consultar a simulação da integração. | Retorna exatamente o JSON estabelecido pela API (`200`). |
 | `POST /api/v1/onboarding/validations` | Executar/registrar a validação com dados da unidade e métricas de conexão. | Resultado e log criado (`201`). |
 | `GET /health` | Verificar se a API e banco estão disponíveis. | `{"status":"ok"}` (`200`). |
 
 O contrato final deve ser publicado em OpenAPI/Swagger ou, pelo menos, em um arquivo Markdown com exemplos de request e response.
 
+O contrato de resposta da consulta é imutável: `pulse`, `reboot` e `available`. Esses campos são booleanos e nenhum outro campo deve ser incluído na resposta da integração simulada.
+
 ### Comportamentos da controladora a simular
 
 | Comportamento | Requisito para o simulador e portal |
 | --- | --- |
-| Sincronização | A controladora envia periodicamente sua identificação, versão e disponibilidade à nuvem e recebe uma resposta JSON. O simulador deve devolver somente os dados necessários ao onboarding. |
-| Indicador de comunicação | Uma sincronização bem-sucedida representa a comunicação estabelecida; falhas repetidas levam a reconexão, indisponibilidade e reinicialização conforme os limites documentados. |
+| Sincronização | A controladora envia periodicamente sua identificação, versão e disponibilidade à nuvem e recebe uma resposta JSON. O simulador devolve exatamente os três valores estabelecidos no contrato. |
+| Indicador de comunicação | Uma resposta HTTP bem-sucedida e JSON válido representam comunicação confirmada. Falha de resposta representa comunicação não confirmada. |
 | Canais de máquina | Uma controladora pode atender lavadora e secadora. O onboarding consulta a controladora pelo MAC sem exigir que o cliente informe o canal. |
 | Segurança operacional | O onboarding não envia comandos, pulsos, reinicializações ou configurações de Wi-Fi. Ele somente orienta, consulta status, testa conexão e grava logs. |
 | Recuperação de rede | Enquanto a controladora tenta recuperar rede ou comunicação, o portal deve informar “reconectando” e evitar declarar sucesso até nova resposta válida. |
@@ -183,8 +187,8 @@ O simulador pode ser uma rota da própria API no MVP. Se ele virar um processo i
 - [ ] Criar healthcheck do banco e fazer a API aguardar o banco saudável.
 - [ ] Definir nomes de estados, códigos de erro e respostas padronizadas.
 - [ ] Obter a especificação Swagger/OpenAPI ou um exemplo anonimizado de request/response JSON da API Azure; reproduzir somente o contrato necessário no simulador.
-- [ ] Definir como a velocidade de conexão em Mbps será medida no ambiente simulado e usar o limite de aprovação de 5 Mbps.
-- [ ] Definir um arquivo de massa simulada com controladoras online, offline, velocidade reprovada, adequada e recomendada.
+- [ ] Implementar transferências de teste para medir download e upload no navegador do cliente, conectado à mesma rede da controladora.
+- [ ] Definir uma massa simulada de uma única controladora, com cenários de resposta válida, falha de resposta, máquina disponível, máquina ocupada e reinicialização pendente; combinar cada cenário com velocidades reprovada, adequada e recomendada.
 - [ ] Criar casos de teste e massa de dados simulada reproduzível.
 - [ ] Registrar instruções de execução, logs, parada e remoção de dados locais.
 
@@ -192,29 +196,16 @@ O simulador pode ser uma rota da própria API no MVP. Se ele virar um processo i
 
 O arquivo atual já sobe PostgreSQL e uma API, mas é material de aprendizagem. Antes de adotá-lo como base final, substituir senha fixa por variáveis de ambiente, incluir `healthcheck`, remover `container_name` (evita conflitos entre ambientes), preferir `npm ci` na imagem e separar a inicialização do esquema em migrations. Em produção, não publicar a porta do banco e não montar o código como volume.
 
-## 10. Decisões necessárias antes da implementação
+## 10. Decisões consolidadas
 
-1. Você pode fornecer o arquivo Swagger/OpenAPI ou exemplos anonimizados de request e response JSON da API Azure? Isso define o contrato exato do simulador.
-Esse é o resultado 
-{
-    "pulse": false,
-    "reboot": false,
-    "available": true
-}
-2. Os 5/10 Mbps referem-se a download, upload, ambos ou a uma métrica única devolvida pela API? Para o MVP, assumimos uma métrica única em Mbps.
-Sim ambos
-3. Quais modelos/tipos de controladora e quais instruções/imagens são autorizados para cada um?
-Irei anexar as imagens a uma pasta, crie somente a pasta que irei adicionar posteriormente 
-4. O que ocorre após uma falha: quantas tentativas, qual mensagem e qual canal de suporte?
-Tente 5 vezes, informe um erro correspondente.
-5. Como o portal sem login impede ou aceita a consulta arbitrária de um MAC conhecido?
-somente pelo MAC sem login, segue o principio de um preenchimento de formulario.
-6. Quais dados podem ser guardados para o relatório acadêmico e por quanto tempo?
-Todos os dados de projeto. Que descrevam o produto final.
-7. O projeto precisa simular várias controladoras ao mesmo tempo? Qual cenário deve aparecer na demonstração?
-Somente uma controladora
-8. Em quais navegadores e tamanhos de tela o protótipo será avaliado?
-Chrome, para celulares.
+1. A consulta à simulação retorna somente três valores: solicitação de pulso, solicitação de reinicialização e disponibilidade da máquina.
+2. Download e upload são medidos separadamente no celular conectado à mesma rede da controladora.
+3. As imagens serão adicionadas posteriormente em `public/images/onboarding`.
+4. Em falha, o portal realiza até cinco tentativas e apresenta uma mensagem correspondente ao motivo.
+5. O acesso não exige login; o cliente informa dados básicos da unidade e consulta pelo MAC.
+6. O projeto guarda os dados necessários para descrever e demonstrar o produto final, respeitando a proibição de armazenar senha, SSID, segredos e comandos operacionais.
+7. O MVP simula somente uma controladora.
+8. A avaliação é feita no Google Chrome para celular, usando a proporção do iPhone 14.
 
 ## 11. Próximos artefatos após as respostas
 

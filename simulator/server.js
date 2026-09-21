@@ -1,122 +1,68 @@
-// Importação das dependências fundamentais
-const express = require('express'); // Framework web para criar a API
-const cors = require('cors'); // Middleware para permitir requisições do frontend (React)
-const { Pool } = require('pg'); // Cliente de conexão do PostgreSQL
+const express = require('express');
+const cors = require('cors');
+const { Pool } = require('pg');
 
-// Inicialização do aplicativo Express
 const app = express();
-// Define a porta a partir das variáveis de ambiente (Docker) ou usa 3001 como fallback
-const port = process.env.PORT || 3001;
-
-// Configuração de Middlewares
-app.use(cors()); // Libera o acesso para qualquer domínio (evita erro de CORS no React)
-app.use(express.json()); // Permite que a API entenda requisições com formato JSON (req.body)
-
-// Configuração do Pool de conexão do PostgreSQL.
-// Lê as variáveis de ambiente passadas no docker-compose.yml
+const port = Number(process.env.PORT || 3001);
 const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'admin',
-  password: process.env.DB_PASSWORD || 'password123',
+  host: process.env.DB_HOST || 'localhost', port: Number(process.env.DB_PORT || 5432),
+  user: process.env.DB_USER || 'admin', password: process.env.DB_PASSWORD || 'password123',
   database: process.env.DB_NAME || 'iot_simulator',
-  port: 5432,
+});
+const MAC_PATTERN = /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/;
+const normalizeMac = (mac) => String(mac || '').trim().toUpperCase().replaceAll('-', ':');
+
+app.use(cors());
+app.use(express.json({ limit: '64kb' }));
+
+app.get('/health', async (_request, response) => {
+  try { await pool.query('SELECT 1'); response.json({ status: 'ok' }); }
+  catch { response.status(503).json({ status: 'unavailable' }); }
 });
 
-// Função Assíncrona para inicializar e criar tabelas no banco de dados
-const initDB = async () => {
-  const client = await pool.connect(); // Obtém uma conexão física com o banco
+app.get('/api/v1/controllers/:mac/status', async (request, response, next) => {
   try {
-    // Executa a Query SQL para criar a tabela de controladoras caso ainda não exista
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS controladoras (
-        mac_address VARCHAR(17) PRIMARY KEY,
-        status_conexao VARCHAR(20) DEFAULT 'offline',
-        led_1_alimentacao VARCHAR(15) DEFAULT 'off',
-        led_2_wifi VARCHAR(15) DEFAULT 'off',
-        ultima_sincronizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    console.log('Tabela "controladoras" verificada/criada com sucesso.');
-  } catch (err) {
-    console.error('Erro ao inicializar o banco de dados:', err);
-  } finally {
-    client.release(); // Libera a conexão de volta para o Pool
-  }
-};
-
-// Como o container da API sobe muito rápido, o banco (db) pode não estar 100% pronto.
-// Essa função tenta conectar e, se falhar, aguarda 5 segundos e tenta novamente.
-const connectDBWithRetry = () => {
-  initDB().catch(() => {
-    console.log('Tentando conectar ao banco novamente em 5 segundos...');
-    setTimeout(connectDBWithRetry, 5000);
-  });
-};
-connectDBWithRetry(); // Executa a conexão inicial
-
-// ==========================================
-// ENDPOINTS DA API
-// ==========================================
-
-// Rota POST: Simula o boot físico e a conexão da controladora IoT (usado pelo simulador/Postman)
-app.post('/api/simulator/boot', async (req, res) => {
-  // Desestrutura os dados enviados no corpo da requisição
-  const { mac_address, status_conexao, led_1_alimentacao, led_2_wifi } = req.body;
-
-  // Validação básica: O MAC Address é obrigatório
-  if (!mac_address) {
-    return res.status(400).json({ error: 'MAC Address é obrigatório.' });
-  }
-
-  try {
-    // Insere a nova placa no banco. Se o MAC Address já existir (ON CONFLICT), ele apenas atualiza os status.
+    const mac = normalizeMac(request.params.mac);
+    if (!MAC_PATTERN.test(mac)) return response.status(400).json({ error: 'MAC inválido.' });
     const result = await pool.query(
-      `INSERT INTO controladoras (mac_address, status_conexao, led_1_alimentacao, led_2_wifi, ultima_sincronizacao)
-       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-       ON CONFLICT (mac_address) 
-       DO UPDATE SET 
-         status_conexao = EXCLUDED.status_conexao,
-         led_1_alimentacao = EXCLUDED.led_1_alimentacao,
-         led_2_wifi = EXCLUDED.led_2_wifi,
-         ultima_sincronizacao = CURRENT_TIMESTAMP
-       RETURNING *`, // Retorna o registro completo após inserir/atualizar
-      [mac_address, status_conexao || 'online', led_1_alimentacao || 'orange', led_2_wifi || 'green']
+      'SELECT pulse_requested, reboot_requested, machine_available FROM controllers WHERE mac_address = $1', [mac],
     );
-
-    // Responde sucesso e envia os dados da placa criada
-    res.status(200).json({
-      message: 'Controladora simulada com sucesso',
-      data: result.rows[0],
-    });
-  } catch (err) {
-    console.error(err); // Loga o erro no terminal
-    res.status(500).json({ error: 'Erro interno no servidor' }); // Responde erro 500
-  }
+    if (!result.rowCount) return response.status(404).json({ error: 'Controladora não encontrada.' });
+    const controller = result.rows[0];
+    return response.json({ pulse: controller.pulse_requested, reboot: controller.reboot_requested, available: controller.machine_available });
+  } catch (error) { return next(error); }
 });
 
-// Rota GET: O Front-end React vai chamar este endpoint para verificar se a placa está online
-app.get('/api/onboarding/status/:mac', async (req, res) => {
-  // Captura o MAC passado pela URL via params (ex: /status/00:1B:44...)
-  const { mac } = req.params;
+app.get('/api/v1/network-test/download', (request, response) => {
+  const bytes = Math.min(Math.max(Number(request.query.bytes) || 1048576, 65536), 2097152);
+  response.set({ 'Content-Type': 'application/octet-stream', 'Content-Length': String(bytes), 'Cache-Control': 'no-store' });
+  response.send(Buffer.alloc(bytes, 1));
+});
 
+app.post('/api/v1/network-test/upload', express.raw({ type: 'application/octet-stream', limit: '2mb' }), (_request, response) => response.status(204).end());
+
+app.post('/api/v1/onboarding/validations', async (request, response, next) => {
   try {
-    // Busca no banco um registro correspondente ao MAC
-    const result = await pool.query('SELECT * FROM controladoras WHERE mac_address = $1', [mac]);
-
-    // Se a query retornar zero linhas, a placa nunca conectou (não existe no banco)
-    if (result.rows.length === 0) {
-      return res.status(200).json({ status_conexao: 'not_found' });
+    const data = request.body || {};
+    const mac = normalizeMac(data.macAddress);
+    if (!MAC_PATTERN.test(mac) || !data.customerName?.trim() || !data.franchiseName?.trim() || !data.laundryName?.trim()) {
+      return response.status(400).json({ error: 'Dados obrigatórios inválidos.' });
     }
-
-    // Se encontrou, retorna todos os dados atuais da placa para o React (JSON)
-    res.status(200).json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Erro interno no servidor' });
-  }
+    const result = await pool.query('SELECT pulse_requested, reboot_requested, machine_available FROM controllers WHERE mac_address = $1', [mac]);
+    if (!result.rowCount) return response.status(404).json({ error: 'Controladora não encontrada.' });
+    const controller = result.rows[0];
+    const speedOk = Number(data.downloadMbps) >= 5 && Number(data.uploadMbps) >= 5;
+    const completed = !controller.reboot_requested && data.powerLedConfirmed === true && data.communicationLedConfirmed === true && speedOk;
+    const reason = completed ? null : controller.reboot_requested ? 'CONTROLADORA_REINICIANDO' : !data.powerLedConfirmed || !data.communicationLedConfirmed ? 'LEDS_NAO_CONFIRMADOS' : 'VELOCIDADE_INSUFICIENTE';
+    await pool.query(
+      `INSERT INTO onboarding_attempts (controller_mac, customer_name, franchise_name, laundry_name, power_led_confirmed, communication_led_confirmed, pulse_requested, reboot_requested, machine_available, result, failure_reason, download_mbps, upload_mbps, request_attempts)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [mac, data.customerName.trim(), data.franchiseName.trim(), data.laundryName.trim(), data.powerLedConfirmed, data.communicationLedConfirmed, controller.pulse_requested, controller.reboot_requested, controller.machine_available, completed ? 'SUCCESS' : 'PENDING', reason, Number(data.downloadMbps) || 0, Number(data.uploadMbps) || 0, Math.min(Number(data.attempts) || 1, 5)],
+    );
+    return response.status(201).json({ result: completed ? 'SUCCESS' : 'PENDING', reason, pulse: controller.pulse_requested, reboot: controller.reboot_requested, available: controller.machine_available });
+  } catch (error) { return next(error); }
 });
 
-// Coloca o servidor Express no ar, "ouvindo" requisições na porta definida
-app.listen(port, () => {
-  console.log(`Simulator API rodando na porta ${port}`);
-});
+app.use((_request, response) => response.status(404).json({ error: 'Rota não encontrada.' }));
+app.use((error, _request, response, _next) => { console.error(error); response.status(500).json({ error: 'Erro interno do servidor.' }); });
+app.listen(port, () => console.log(`API do onboarding disponível na porta ${port}`));

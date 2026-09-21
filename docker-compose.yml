@@ -18,13 +18,23 @@ services:
       POSTGRES_PASSWORD: password123
       # Cria a base de dados automaticamente
       POSTGRES_DB: iot_simulator
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d iot_simulator"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     ports:
       # Mapeia a porta interna 5432 para a porta externa 5432 (sua máquina)
       - "5432:5432"
     volumes:
       # Mapeia o volume persistente para não perder os dados salvos
       - pgdata:/var/lib/postgresql/data
-
+      - ./simulator/db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - "8080:8080"
   # Serviço 2: API Mock Node.js
   simulator-api:
     build: 
@@ -45,8 +55,9 @@ services:
       - DB_NAME=iot_simulator
       - PORT=3001
     depends_on:
-      # Garante que a API só inicie depois que o Banco de Dados estiver pronto
-      - db
+      # Aguarda o banco responder antes de iniciar a API.
+      db:
+        condition: service_healthy
     volumes:
       # Sincroniza o código local com o contêiner para o nodemon funcionar
       - ./simulator:/usr/src/app
