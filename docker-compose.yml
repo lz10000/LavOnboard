@@ -1,5 +1,5 @@
 # Versão da especificação do Docker Compose
-version: '3.8'
+#version: '3.8'
 
 # Bloco que declara todos os serviços (contêineres)
 services:

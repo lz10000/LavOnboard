@@ -6,7 +6,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 // ============================================================
 import logoSrc      from '../assets/Aplicativo LavOnboarding.png';
 import ledAmareloSrc from '../assets/Led amarelo aceso.png';
-import ledAzulSrc   from '../assets/Led azul aceso.png';
+import ledAzulSrc   from '../assets/Led verde aceso.png';
 import ligacaoMoedeiro from '../assets/Ligacao_moedeiro.png';
 import ligacaoRS485    from '../assets/Ligacao_RS485.png';
 
