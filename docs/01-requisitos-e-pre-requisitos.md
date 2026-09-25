@@ -215,3 +215,45 @@ O arquivo atual já sobe PostgreSQL e uma API, mas é material de aprendizagem. 
 4. Especificação OpenAPI da API.
 5. Arquivos Docker, Compose, variáveis de ambiente e roteiro de execução.
 6. Plano de testes funcional, integração, acessibilidade e falhas de rede.
+
+## 12. Bibliotecas e dependências do frontend
+
+Esta seção registra as bibliotecas efetivamente utilizadas na implementação do portal React/Vite, incluindo as adicionadas após a definição inicial dos requisitos.
+
+### 12.1 Dependências de produção (`dependencies`)
+
+| Biblioteca | Versão | Finalidade |
+| --- | --- | --- |
+| `react` | ^19.2.8 | Biblioteca principal de interface; modelo de componentes, estado e ciclo de vida. |
+| `react-dom` | ^19.2.8 | Renderização do React no DOM do navegador. |
+| `html5-qrcode` | ^2.3.8 | Leitura de QR Code via câmera do dispositivo (API `getUserMedia`). Utilizado no passo de identificação da controladora pelo MAC. Funciona em `localhost` sem HTTPS; em produção requer HTTPS. |
+
+### 12.2 Dependências de desenvolvimento (`devDependencies`)
+
+| Biblioteca | Versão | Finalidade |
+| --- | --- | --- |
+| `vite` | ^8.2.2 | Bundler e servidor de desenvolvimento. Comando de execução: `npm run dev`. |
+| `@vitejs/plugin-react` | ^6.1.0 | Plugin Vite que habilita JSX e Fast Refresh para React. |
+| `tailwindcss` | ^3.4.19 | Framework CSS utilitário. Utilizado para toda a estilização do portal no modelo mobile-first (viewport 390 × 844 px do iPhone 14). |
+| `postcss` | ^8.5.26 | Processador CSS necessário para o pipeline do Tailwind CSS. |
+| `autoprefixer` | ^10.5.4 | Plugin PostCSS que adiciona prefixos de vendor automaticamente para compatibilidade cross-browser. |
+| `eslint` | ^10.9.0 | Linter de JavaScript/JSX para análise estática de código. |
+| `eslint-plugin-react-hooks` | ^7.1.1 | Regras ESLint para uso correto dos React Hooks. |
+| `eslint-plugin-react-refresh` | ^0.5.4 | Regras ESLint para compatibilidade com o Fast Refresh do Vite. |
+| `@eslint/js` | ^10.0.1 | Configurações base do ESLint para JavaScript. |
+| `globals` | ^17.11.0 | Definições de variáveis globais para configuração do ESLint. |
+| `@types/react` | ^19.2.18 | Tipos TypeScript para React (auxilia IDEs com autocompletar). |
+| `@types/react-dom` | ^19.2.4 | Tipos TypeScript para React DOM. |
+
+### 12.3 Recurso externo de fonte tipográfica
+
+| Recurso | Origem | Finalidade |
+| --- | --- | --- |
+| Inter (400, 500, 600, 700, 800) | Google Fonts CDN | Tipografia principal do portal. Carregada via `@import` no `index.css`. Não requer instalação de pacote npm. |
+
+### 12.4 Observações de uso
+
+- O arquivo `tailwind.config.js` foi configurado com cores da marca (`brand.primary`, `brand.secondary`, `brand.green`, `brand.orange`, `brand.danger`), fonte `Inter`, e animações customizadas (`slide-up`, `fade-in`, `pulse-led`).
+- A leitura de QR Code (`html5-qrcode`) depende de permissão de câmera concedida pelo usuário no navegador. Em caso de negação, o portal exibe mensagem de erro e mantém a opção de entrada manual do MAC.
+- O teste de velocidade (RF-07) é implementado via `fetch` cronometrado contra dois endpoints da API local (`GET /api/v1/speedtest/download` e `POST /api/v1/speedtest/upload`). Em ambiente sem a API, os valores retornam simulados para fins de demonstração.
+- Nenhuma biblioteca de gerenciamento de estado global (Redux, Zustand, etc.) foi adicionada; o estado é gerenciado localmente com `useState` e `useRef` do React, adequado ao escopo do MVP.
