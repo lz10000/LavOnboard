@@ -20,10 +20,18 @@ app.get('/health', async (_request, response) => {
   catch { response.status(503).json({ status: 'unavailable' }); }
 });
 
+const hardwareState = new Map();
+
 app.get('/api/v1/controllers/:mac/status', async (request, response, next) => {
   try {
     const mac = normalizeMac(request.params.mac);
     if (!MAC_PATTERN.test(mac)) return response.status(400).json({ error: 'MAC inválido.' });
+    // Recupera os dados simulados via ping
+    const pingData = hardwareState.get(mac);
+    if (pingData) {
+      return response.json(pingData);
+    }
+
     const result = await pool.query(
       'SELECT pulse_requested, reboot_requested, machine_available FROM controllers WHERE mac_address = $1', [mac],
     );
@@ -31,6 +39,20 @@ app.get('/api/v1/controllers/:mac/status', async (request, response, next) => {
     const controller = result.rows[0];
     return response.json({ pulse: controller.pulse_requested, reboot: controller.reboot_requested, available: controller.machine_available });
   } catch (error) { return next(error); }
+});
+
+app.post('/api/v1/controllers/:mac/ping', (request, response) => {
+  const mac = normalizeMac(request.params.mac);
+  if (!MAC_PATTERN.test(mac)) return response.status(400).json({ error: 'MAC inválido.' });
+  
+  const data = request.body || {};
+  hardwareState.set(mac, {
+    pulse: data.pulse !== undefined ? data.pulse : false,
+    reboot: data.reboot !== undefined ? data.reboot : false,
+    available: data.available !== undefined ? data.available : true
+  });
+  
+  return response.json({ message: 'Ping da controladora recebido com sucesso', mac });
 });
 
 app.get('/api/v1/network-test/download', (request, response) => {

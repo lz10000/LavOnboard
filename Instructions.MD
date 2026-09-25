@@ -120,3 +120,26 @@ Lav Onboarding/
 | `npm run build`  | Gera o bundle de produção                  |
 | `npm run preview`| Serve o bundle de produção localmente      |
 | `npm run lint`   | Verifica o código com ESLint               |
+
+---
+
+## Simulando a Controladora via Postman (Ping)
+
+Para testar o fluxo de status em tempo real sem alterar os dados fixos do banco, a API possui uma rota em memória que recebe os **pings** da controladora simulada.
+
+1. Abra o Postman.
+2. Crie uma requisição do tipo **POST** para a seguinte URL (substitua o MAC se necessário):
+   `http://localhost:3001/api/v1/controllers/00:1B:44:11:3A:B7/ping`
+3. Na aba **Body**, escolha **raw** e **JSON**.
+4. Cole o payload com os dados de hardware:
+
+```json
+{
+  "pulse": false,
+  "reboot": false,
+  "available": true
+}
+```
+5. Clique em Send.
+
+Agora, toda vez que o frontend (ou você) fizer um **GET** em `/status`, a API retornará o último status simulado via Postman (que sobrepõe o status gravado no banco).

@@ -147,6 +147,7 @@ Para o MVP, `controllers` e `onboarding_attempts` já demonstram o necessário. 
 | Método e rota | Finalidade | Resposta principal |
 | --- | --- | --- |
 | `GET /api/v1/controllers/:mac/status` | Consultar a simulação da integração. | Retorna exatamente o JSON estabelecido pela API (`200`). |
+| `POST /api/v1/controllers/:mac/ping` | Simula o recebimento dos dados diretamente do hardware, gravados em memória. | Retorna mensagem de sucesso (`200`). |
 | `POST /api/v1/onboarding/validations` | Executar/registrar a validação com dados da unidade e métricas de conexão. | Resultado e log criado (`201`). |
 | `GET /health` | Verificar se a API e banco estão disponíveis. | `{"status":"ok"}` (`200`). |
 
