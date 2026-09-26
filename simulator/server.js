@@ -87,5 +87,5 @@ app.post('/api/v1/onboarding/validations', async (request, response, next) => {
 
 app.use((_request, response) => response.status(404).json({ error: 'Rota não encontrada.' }));
 app.use((error, _request, response, _next) => { console.error(error); response.status(500).json({ error: 'Erro interno do servidor.' }); });
-app.listen(port, () => console.log(`API do onboarding disponível na porta ${port}`));
+const server = app.listen(port, () => console.log(`API do onboarding disponível na porta ${port}`));
 server.timeout = 100000;

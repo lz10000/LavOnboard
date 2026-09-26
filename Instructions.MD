@@ -68,8 +68,17 @@ docker stop iot_postgres
 # Parar a API simuladora
 docker stop iot_simulator_api
 
-# Parar e remover todos os contêineres do projeto
+# Parar e remover contêineres (mantém os dados do banco)
 docker-compose down
+
+# Reset completo do ambiente (remove contêineres E apaga os volumes do banco)
+docker-compose down -v
+
+# Reiniciar tudo do zero aplicando novas migrações/scripts de init.sql
+docker-compose down -v && docker-compose up -d
+
+# Reconstruir imagens após alterar Dockerfile ou dependências da API
+docker-compose up -d --build
 
 # Ver logs de um serviço específico
 docker-compose logs -f simulator-api
