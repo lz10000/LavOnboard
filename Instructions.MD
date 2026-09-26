@@ -129,3 +129,9 @@ Lav Onboarding/
 | `npm run build`  | Gera o bundle de produção                  |
 | `npm run preview`| Serve o bundle de produção localmente      |
 | `npm run lint`   | Verifica o código com ESLint               |
+
+# Enviar JSON via terminal
+
+# Realiza a requisição POST enviando o JSON bruto para a API do controlador
+
+Invoke-RestMethod -Uri "http://localhost:3001/api/v1/controllers/00:70:07:e7:1e:04/ping" -Method Post -ContentType "application/json" -Body '{"pulse":false,"reboot":false,"available":true}'
