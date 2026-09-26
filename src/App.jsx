@@ -1,4 +1,4 @@
-import React from 'react'
+
 import Stepper from './components/Stepper'
 import './index.css'
 

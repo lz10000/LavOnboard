@@ -1,20 +1,20 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 
 // ============================================================
 // ASSETS — imagens locais da pasta src/assets
 // ============================================================
-import logoSrc      from '../assets/Aplicativo LavOnboarding.png';
+import logoSrc from '../assets/Aplicativo LavOnboarding.png';
 import ledAmareloSrc from '../assets/Led amarelo aceso.png';
-import ledAzulSrc   from '../assets/Led verde aceso.png';
+import ledAzulSrc from '../assets/Led verde aceso.png';
 import ligacaoMoedeiro from '../assets/Ligacao_moedeiro.png';
-import ligacaoRS485    from '../assets/Ligacao_RS485.png';
+import ligacaoRS485 from '../assets/Ligacao_RS485.png';
 
 // ============================================================
 // CONSTANTES
 // ============================================================
 const TOTAL_STEPS = 8;
-const API_BASE    = 'http://localhost:3001/api/v1';
+const API_BASE = 'http://localhost:3001/api/v1';
 
 // Normaliza MAC: remove separadores e coloca em XX:XX:XX:XX:XX:XX maiúsculas
 function normalizeMac(raw) {
@@ -75,10 +75,10 @@ function Spinner({ size = 'md' }) {
 function SpeedBadge({ label, value, unit = 'Mbps' }) {
   const num = parseFloat(value);
   let color, text;
-  if (isNaN(num))          { color = 'bg-gray-100 text-gray-500'; text = 'Aguardando'; }
-  else if (num < 5)        { color = 'bg-red-100 text-red-700';    text = 'Reprovada'; }
-  else if (num < 10)       { color = 'bg-yellow-100 text-yellow-700'; text = 'Adequada'; }
-  else                     { color = 'bg-green-100 text-green-700';  text = 'Recomendada'; }
+  if (isNaN(num)) { color = 'bg-gray-100 text-gray-500'; text = 'Aguardando'; }
+  else if (num < 5) { color = 'bg-red-100 text-red-700'; text = 'Reprovada'; }
+  else if (num < 10) { color = 'bg-yellow-100 text-yellow-700'; text = 'Adequada'; }
+  else { color = 'bg-green-100 text-green-700'; text = 'Recomendada'; }
 
   return (
     <div className="flex items-center justify-between bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100">
@@ -99,9 +99,8 @@ function CheckItem({ id, label, checked, onChange, children }) {
   return (
     <label
       htmlFor={id}
-      className={`flex items-start gap-3 p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 ${
-        checked ? 'border-brand-secondary bg-blue-50' : 'border-gray-200 bg-white'
-      }`}
+      className={`flex items-start gap-3 p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 ${checked ? 'border-brand-secondary bg-blue-50' : 'border-gray-200 bg-white'
+        }`}
     >
       <input
         id={id}
@@ -124,9 +123,9 @@ function CheckItem({ id, label, checked, onChange, children }) {
 // ============================================================
 function useSpeedTest() {
   const [download, setDownload] = useState(null);
-  const [upload, setUpload]     = useState(null);
-  const [running, setRunning]   = useState(false);
-  const [done, setDone]         = useState(false);
+  const [upload, setUpload] = useState(null);
+  const [running, setRunning] = useState(false);
+  const [done, setDone] = useState(false);
 
   const run = useCallback(async () => {
     setRunning(true);
@@ -167,10 +166,10 @@ function useSpeedTest() {
 // HOOK: consulta à API da controladora
 // ============================================================
 function useControllerStatus() {
-  const [status, setStatus]   = useState('idle'); // idle | loading | success | error | reconnecting | rebooting
-  const [data, setData]       = useState(null);
-  const [error, setError]     = useState('');
-  const retriesRef            = useRef(0);
+  const [status, setStatus] = useState('idle'); // idle | loading | success | error | reconnecting | rebooting
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const retriesRef = useRef(0);
 
   const query = useCallback(async (mac) => {
     if (!mac) return;
@@ -183,7 +182,10 @@ function useControllerStatus() {
         const res = await fetch(`${API_BASE}/controllers/${mac}/status`, {
           signal: AbortSignal.timeout(8000),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `HTTP ${res.status}`);
+        }
         const json = await res.json();
 
         // Valida contrato: somente pulse, reboot, available
@@ -202,17 +204,17 @@ function useControllerStatus() {
         }
       } catch (err) {
         retriesRef.current += 1;
-        if (retriesRef.current >= 5) {
+        if (retriesRef.current >= 4) {
           setStatus('error');
           setError(
-            retriesRef.current >= 13
-              ? 'A controladora não está respondendo. Verifique a instalação e acione o suporte.'
-              : 'Não foi possível confirmar a comunicação. Verifique a rede Wi-Fi e aguarde.'
+            err.message && !err.message.startsWith('HTTP')
+              ? err.message
+              : 'Não foi possível confirmar a comunicação. Certifique-se de enviar o JSON da controladora e tente novamente.'
           );
           retriesRef.current = 0;
         } else {
-          // Tenta novamente após 3 s
-          setTimeout(attempt, 3000);
+          // Tenta novamente após 2 s
+          setTimeout(attempt, 2000);
         }
       }
     };
@@ -235,10 +237,18 @@ function useControllerStatus() {
 // HOOK: leitor de QR Code (html5-qrcode)
 // ============================================================
 function useQrReader(onResult) {
-  const scannerRef  = useRef(null);
-  const elemId      = 'qr-reader-element';
-  const [active, setActive]   = useState(false);
+  const scannerRef = useRef(null);
+  const elemId = 'qr-reader-element';
+  const [active, setActive] = useState(false);
   const [camError, setCamError] = useState('');
+
+  const stop = useCallback(async () => {
+    if (scannerRef.current) {
+      try { await scannerRef.current.stop(); } catch { /* ignore */ }
+      scannerRef.current = null;
+    }
+    setActive(false);
+  }, []);
 
   const start = useCallback(async () => {
     setCamError('');
@@ -255,19 +265,11 @@ function useQrReader(onResult) {
         },
         () => { /* ignore scan errors */ }
       );
-    } catch (e) {
+    } catch {
       setCamError('Não foi possível acessar a câmera. Verifique as permissões do navegador.');
       setActive(false);
     }
-  }, [onResult]);
-
-  const stop = useCallback(async () => {
-    if (scannerRef.current) {
-      try { await scannerRef.current.stop(); } catch { /* ignore */ }
-      scannerRef.current = null;
-    }
-    setActive(false);
-  }, []);
+  }, [onResult, stop]);
 
   // Limpa ao desmontar
   useEffect(() => () => { stop(); }, [stop]);
@@ -280,8 +282,8 @@ function useQrReader(onResult) {
 // ============================================================
 const Stepper = () => {
   // ── Estado global do formulário ──────────────────────────
-  const [step, setStep]               = useState(1);
-  const [form, setForm]               = useState({
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState({
     customerName: '',
     franchiseName: '',
     laundryName: '',
@@ -295,7 +297,7 @@ const Stepper = () => {
   });
 
   // ── API e velocidade ─────────────────────────────────────
-  const ctrl  = useControllerStatus();
+  const ctrl = useControllerStatus();
   const speed = useSpeedTest();
 
   // ── Acessibilidade: foco automático ao mudar de passo ──
@@ -308,10 +310,52 @@ const Stepper = () => {
   // ── Helpers ──────────────────────────────────────────────
   const setField = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
+  const [saving, setSaving] = useState(false);
+  const [savedAttemptId, setSavedAttemptId] = useState(null);
+
   const goNext = () => setStep(s => Math.min(s + 1, TOTAL_STEPS));
   const goPrev = () => {
     setStep(s => Math.max(s - 1, 1));
     ctrl.reset();
+  };
+
+  const handleFinishValidation = async () => {
+    setSaving(true);
+    try {
+      const payload = {
+        macAddress: normalizeMac(form.mac),
+        customerName: form.customerName,
+        franchiseName: form.isIndependent ? 'Independente' : form.franchiseName,
+        isIndependent: form.isIndependent,
+        laundryName: form.laundryName,
+        powerLedConfirmed: form.ledOrange,
+        communicationLedConfirmed: form.ledGreen,
+        downloadMbps: speed.download ?? 0,
+        uploadMbps: speed.upload ?? 0,
+        pulse: ctrl.data?.pulse ?? false,
+        reboot: ctrl.data?.reboot ?? false,
+        available: ctrl.data?.available ?? true,
+        attempts: 1,
+      };
+
+      const res = await fetch(`${API_BASE}/onboarding/validations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.attempt?.id) {
+          setSavedAttemptId(json.attempt.id);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao registrar validação no banco de dados:', err);
+    } finally {
+      setSaving(false);
+      goNext();
+    }
   };
 
   // Regras de bloqueio do botão "Avançar" por passo
@@ -622,17 +666,15 @@ const Stepper = () => {
               {/* Moedeiro */}
               <button
                 id="btn-tipo-moedeiro"
-                className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200 text-left ${
-                  form.washerType === 'moedeiro'
+                className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200 text-left ${form.washerType === 'moedeiro'
                     ? 'border-brand-secondary bg-brand-light'
                     : 'border-gray-200 bg-white'
-                }`}
+                  }`}
                 onClick={() => setField('washerType', 'moedeiro')}
                 aria-pressed={form.washerType === 'moedeiro'}
               >
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                  form.washerType === 'moedeiro' ? 'border-brand-secondary' : 'border-gray-300'
-                }`}>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${form.washerType === 'moedeiro' ? 'border-brand-secondary' : 'border-gray-300'
+                  }`}>
                   {form.washerType === 'moedeiro' && (
                     <div className="w-3 h-3 rounded-full bg-brand-secondary" />
                   )}
@@ -646,17 +688,15 @@ const Stepper = () => {
               {/* RS-485 */}
               <button
                 id="btn-tipo-rs485"
-                className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200 text-left ${
-                  form.washerType === 'rs485'
+                className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200 text-left ${form.washerType === 'rs485'
                     ? 'border-brand-secondary bg-brand-light'
                     : 'border-gray-200 bg-white'
-                }`}
+                  }`}
                 onClick={() => setField('washerType', 'rs485')}
                 aria-pressed={form.washerType === 'rs485'}
               >
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                  form.washerType === 'rs485' ? 'border-brand-secondary' : 'border-gray-300'
-                }`}>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${form.washerType === 'rs485' ? 'border-brand-secondary' : 'border-gray-300'
+                  }`}>
                   {form.washerType === 'rs485' && (
                     <div className="w-3 h-3 rounded-full bg-brand-secondary" />
                   )}
@@ -821,24 +861,42 @@ const Stepper = () => {
                   </div>
                 )}
                 {ctrl.status === 'success' && (
-                  <div className="flex items-center gap-2 w-full" aria-live="assertive">
-                    <span className="text-2xl" aria-hidden="true">✅</span>
-                    <div>
-                      <p className="font-semibold text-green-700">Conexão ok</p>
-                      <p className="text-xs text-gray-400">
-                        {ctrl.data?.available ? 'Máquina disponível' : 'Máquina ocupada'}&nbsp;·&nbsp;
-                        {ctrl.data?.pulse ? 'Pulso pendente' : 'Sem pulso pendente'}
-                      </p>
+                  <div className="flex items-center justify-between w-full" aria-live="assertive">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl" aria-hidden="true">✅</span>
+                      <div>
+                        <p className="font-semibold text-green-700">Conexão ok</p>
+                        <p className="text-xs text-gray-400">
+                          {ctrl.data?.available ? 'Máquina disponível' : 'Máquina ocupada'}&nbsp;·&nbsp;
+                          {ctrl.data?.pulse ? 'Pulso pendente' : 'Sem pulso pendente'}
+                        </p>
+                      </div>
                     </div>
+                    <button
+                      id="btn-reverificar-status"
+                      className="text-xs text-brand-secondary font-medium underline hover:text-brand-primary"
+                      onClick={() => ctrl.query(normalizeMac(form.mac))}
+                    >
+                      Verificar novamente
+                    </button>
                   </div>
                 )}
                 {ctrl.status === 'rebooting' && (
-                  <div className="flex items-center gap-2 w-full" role="alert">
-                    <span className="text-2xl" aria-hidden="true">🔄</span>
-                    <div>
-                      <p className="font-semibold text-yellow-700">Controladora reiniciando</p>
-                      <p className="text-xs text-gray-400">Aguarde e tente novamente em alguns segundos.</p>
+                  <div className="flex items-center justify-between w-full" role="alert">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl" aria-hidden="true">🔄</span>
+                      <div>
+                        <p className="font-semibold text-yellow-700">Controladora reiniciando</p>
+                        <p className="text-xs text-gray-400">Aguarde e tente novamente em alguns segundos.</p>
+                      </div>
                     </div>
+                    <button
+                      id="btn-reverificar-reboot"
+                      className="text-xs text-brand-secondary font-medium underline hover:text-brand-primary"
+                      onClick={() => ctrl.query(normalizeMac(form.mac))}
+                    >
+                      Verificar novamente
+                    </button>
                   </div>
                 )}
                 {ctrl.status === 'error' && (
@@ -901,12 +959,12 @@ const Stepper = () => {
               <button className="btn-ghost" onClick={() => { ctrl.reset(); goPrev(); }} aria-label="Voltar">← Voltar</button>
               <button
                 id="btn-validacao-avancar"
-                className={`btn-primary flex-1 ${isNextDisabled() ? 'opacity-40 cursor-not-allowed' : ''}`}
-                onClick={goNext}
-                disabled={isNextDisabled()}
-                aria-disabled={isNextDisabled()}
+                className={`btn-primary flex-1 ${isNextDisabled() || saving ? 'opacity-40 cursor-not-allowed' : ''}`}
+                onClick={handleFinishValidation}
+                disabled={isNextDisabled() || saving}
+                aria-disabled={isNextDisabled() || saving}
               >
-                Ver Resultado
+                {saving ? 'Gravando no banco…' : 'Ver Resultado'}
               </button>
             </div>
           </div>
@@ -936,14 +994,29 @@ const Stepper = () => {
 
                   {/* Resumo */}
                   <div className="card w-full text-left space-y-2">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Resumo</p>
+                    <div className="flex justify-between items-center mb-1">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Resumo</p>
+                      <span className="text-[11px] font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-200">
+                        {savedAttemptId ? 'Dispositivo está OK' : 'Formulário salvo'}
+                      </span>
+                    </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Controladora</span>
-                      <span className="font-mono font-semibold text-gray-700">{normalizeMac(form.mac)}</span>
+                      <span className="text-gray-500">Usuário</span>
+                      <span className="font-semibold text-gray-700">{form.customerName}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Franquia</span>
+                      <span className="font-semibold text-gray-700">
+                        {form.isIndependent ? 'Independente' : form.franchiseName}
+                      </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Lavanderia</span>
                       <span className="font-semibold text-gray-700">{form.laundryName}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Controladora</span>
+                      <span className="font-mono font-semibold text-gray-700">{normalizeMac(form.mac)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Download</span>
@@ -998,7 +1071,12 @@ const Stepper = () => {
 
                   {/* Diagnóstico */}
                   <div className="card w-full text-left space-y-2">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Diagnóstico</p>
+                    <div className="flex justify-between items-center mb-1">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Diagnóstico</p>
+                      <span className="text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                        {savedAttemptId ? `Tentativa registrada (#${savedAttemptId})` : 'Tentativa registrada no banco'}
+                      </span>
+                    </div>
                     <DiagLine
                       ok={ctrl.status === 'success'}
                       label="Comunicação com a controladora"
