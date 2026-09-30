@@ -19,7 +19,8 @@
 | **PostgreSQL**      | `iot_postgres`         | `5432` | Banco de dados principal         |
 | **API Node.js**     | `iot_simulator_api`    | `3001` | API simuladora (mock)            |
 | **Adminer**         | *(adminer)*            | `8080` | Interface web para o banco       |
-| **Frontend React**  | *(local, via Vite)*    | `5173` | Site de onboarding               |
+| **Frontend Docker** | `iot_webapp`           | `8081` | Site em produção (Nginx)         |
+| **Frontend React**  | *(local, via Vite)*    | `5173` | Site de onboarding (dev)         |
 
 ---
 

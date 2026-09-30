@@ -19,7 +19,7 @@ services:
       # Cria a base de dados automaticamente
       POSTGRES_DB: iot_simulator
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d iot_simulator"]
+      test: [ "CMD-SHELL", "pg_isready -U admin -d iot_simulator" ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -37,7 +37,7 @@ services:
       - "8080:8080"
   # Serviço 2: API Mock Node.js
   simulator-api:
-    build: 
+    build:
       # Constrói a imagem baseada no Dockerfile dentro da pasta simulator
       context: ./simulator
     # Nome amigável do contêiner
@@ -63,6 +63,19 @@ services:
       - ./simulator:/usr/src/app
       # Isola os node_modules do contêiner para não dar conflito com o Windows
       - /usr/src/app/node_modules
+  webapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: iot_webapp
+    restart: always
+    ports:
+      - "8081:80"
+    environment:
+      - API_URL=http://simulator-api:3001
+    depends_on:
+      simulator-api:
+        condition: service_started
 
 # Declaração dos volumes físicos persistentes
 volumes:

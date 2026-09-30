@@ -1,0 +1,451 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Lav Onboarding - IoT Simulator API",
+    "version": "1.0.0",
+    "description": "API Mock e de integração para o portal de Onboarding IoT (Self Install) da Lav Onboarding. Permite simulação de controladoras, testes de conexão e persistência de tentativas de onboarding."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Servidor Atual"
+    },
+    {
+      "url": "http://localhost:3001",
+      "description": "Ambiente de Desenvolvimento Local"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Verificação de integridade da API e do banco de dados"
+    },
+    {
+      "name": "Controladoras",
+      "description": "Monitoramento e envio de telemetria/ping de controladoras IoT"
+    },
+    {
+      "name": "Teste de Rede",
+      "description": "Endpoints de download e upload para cálculo de velocidade e latência"
+    },
+    {
+      "name": "Onboarding",
+      "description": "Fluxo de validação de instalação e comissionamento"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Healthcheck do serviço",
+        "description": "Verifica se a API está ativa e se a conexão com o PostgreSQL está operante.",
+        "responses": {
+          "200": {
+            "description": "Serviço saudável",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "ok" }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Serviço ou banco de dados indisponível",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "unavailable" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/controllers/{mac}/status": {
+      "get": {
+        "tags": ["Controladoras"],
+        "summary": "Obtém o status de uma controladora",
+        "description": "Consulta o último sinal enviado pela controladora e consome o evento da memória (fila única).",
+        "parameters": [
+          {
+            "name": "mac",
+            "in": "path",
+            "required": true,
+            "description": "Endereço MAC da controladora no formato XX:XX:XX:XX:XX:XX",
+            "schema": {
+              "type": "string",
+              "pattern": "^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$",
+              "example": "00:70:07:E7:1E:04"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status recente encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControllerStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Formato de MAC inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "MAC inválido."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Nenhum sinal recente ou ping já consumido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Nenhum sinal recente da controladora. Envie um novo JSON via POST /api/v1/controllers/:mac/ping."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/controllers/{mac}/ping": {
+      "post": {
+        "tags": ["Controladoras"],
+        "summary": "Simula sinal de ping da controladora",
+        "description": "Envia um pulso de telemetria simulado para a controladora, atualizando memória e banco de dados.",
+        "parameters": [
+          {
+            "name": "mac",
+            "in": "path",
+            "required": true,
+            "description": "Endereço MAC da controladora",
+            "schema": {
+              "type": "string",
+              "example": "00:70:07:E7:1E:04"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PingPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ping recebido com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string", "example": "Ping da controladora recebido com sucesso" },
+                    "mac": { "type": "string", "example": "00:70:07:E7:1E:04" },
+                    "data": { "$ref": "#/components/schemas/PingPayload" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Formato de MAC inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/network-test/download": {
+      "get": {
+        "tags": ["Teste de Rede"],
+        "summary": "Download para teste de velocidade de rede",
+        "description": "Gera um fluxo de bytes para medir a taxa de download do cliente.",
+        "parameters": [
+          {
+            "name": "bytes",
+            "in": "query",
+            "required": false,
+            "description": "Quantidade de bytes a gerar (mínimo: 65536, máximo: 2097152, padrão: 1048576)",
+            "schema": {
+              "type": "integer",
+              "default": 1048576
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Carga binária para medição",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/speedtest/download": {
+      "get": {
+        "tags": ["Teste de Rede"],
+        "summary": "Alias para download de teste de velocidade",
+        "parameters": [
+          {
+            "name": "bytes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1048576
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Carga binária para medição",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/network-test/upload": {
+      "post": {
+        "tags": ["Teste de Rede"],
+        "summary": "Upload para teste de velocidade de rede",
+        "description": "Recebe fluxo de bytes para cálculo de velocidade de upload.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Upload processado com sucesso"
+          }
+        }
+      }
+    },
+    "/api/v1/speedtest/upload": {
+      "post": {
+        "tags": ["Teste de Rede"],
+        "summary": "Alias para upload de teste de velocidade",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Upload processado com sucesso"
+          }
+        }
+      }
+    },
+    "/api/v1/onboarding/validations": {
+      "post": {
+        "tags": ["Onboarding"],
+        "summary": "Valida e salva tentativa de onboarding",
+        "description": "Submete os dados de instalação e status da máquina. Salva no banco PostgreSQL e retorna status SUCCESS ou PENDING.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingValidationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Validação registrada com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingValidationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dados obrigatórios inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "Dados obrigatórios inválidos."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ControllerStatusResponse": {
+        "type": "object",
+        "properties": {
+          "pulse": { "type": "boolean", "example": false },
+          "reboot": { "type": "boolean", "example": false },
+          "available": { "type": "boolean", "example": true }
+        }
+      },
+      "PingPayload": {
+        "type": "object",
+        "properties": {
+          "pulse": { "type": "boolean", "default": false, "example": false },
+          "reboot": { "type": "boolean", "default": false, "example": false },
+          "available": { "type": "boolean", "default": true, "example": true }
+        }
+      },
+      "OnboardingValidationRequest": {
+        "type": "object",
+        "required": [
+          "macAddress",
+          "customerName",
+          "laundryName",
+          "powerLedConfirmed",
+          "communicationLedConfirmed"
+        ],
+        "properties": {
+          "macAddress": {
+            "type": "string",
+            "example": "00:70:07:E7:1E:04"
+          },
+          "customerName": {
+            "type": "string",
+            "example": "João da Silva"
+          },
+          "franchiseName": {
+            "type": "string",
+            "example": "Lavanderia Express"
+          },
+          "isIndependent": {
+            "type": "boolean",
+            "example": false
+          },
+          "laundryName": {
+            "type": "string",
+            "example": "Unidade Centro"
+          },
+          "powerLedConfirmed": {
+            "type": "boolean",
+            "example": true
+          },
+          "communicationLedConfirmed": {
+            "type": "boolean",
+            "example": true
+          },
+          "pulse": {
+            "type": "boolean",
+            "example": false
+          },
+          "reboot": {
+            "type": "boolean",
+            "example": false
+          },
+          "available": {
+            "type": "boolean",
+            "example": true
+          },
+          "downloadMbps": {
+            "type": "number",
+            "example": 25.4
+          },
+          "uploadMbps": {
+            "type": "number",
+            "example": 15.2
+          },
+          "attempts": {
+            "type": "integer",
+            "example": 1
+          }
+        }
+      },
+      "OnboardingValidationResponse": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": ["SUCCESS", "PENDING"],
+            "example": "SUCCESS"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "attempt": {
+            "type": "object",
+            "description": "Registro completo persistido no banco"
+          },
+          "pulse": { "type": "boolean", "example": false },
+          "reboot": { "type": "boolean", "example": false },
+          "available": { "type": "boolean", "example": true }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "Descrição do erro"
+          }
+        }
+      }
+    }
+  }
+}
