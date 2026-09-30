@@ -244,7 +244,14 @@ function useQrReader(onResult) {
 
   const stop = useCallback(async () => {
     if (scannerRef.current) {
-      try { await scannerRef.current.stop(); } catch { /* ignore */ }
+      try {
+        if (scannerRef.current.isScanning) {
+          await scannerRef.current.stop();
+        }
+        await scannerRef.current.clear();
+      } catch {
+        /* ignore cleanup error */
+      }
       scannerRef.current = null;
     }
     setActive(false);
@@ -252,21 +259,85 @@ function useQrReader(onResult) {
 
   const start = useCallback(async () => {
     setCamError('');
+
+    // Validação de contexto seguro do navegador
+    if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      setCamError('O acesso à câmera requer HTTPS ou acesso local via http://localhost.');
+      return;
+    }
+
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      setCamError('Seu navegador não suporta acesso à câmera ou o recurso está desabilitado.');
+      return;
+    }
+
     setActive(true);
+
+    // Pequeno delay para garantir sincronização do DOM
+    await new Promise((r) => setTimeout(r, 60));
+
     try {
+      const elem = document.getElementById(elemId);
+      if (!elem) {
+        throw new Error('Elemento leitor de QR Code não encontrado na página.');
+      }
+
+      // Limpa instância anterior se houver
+      if (scannerRef.current) {
+        try {
+          if (scannerRef.current.isScanning) await scannerRef.current.stop();
+          await scannerRef.current.clear();
+        } catch {
+          /* ignore */
+        }
+      }
+
       const scanner = new Html5Qrcode(elemId);
       scannerRef.current = scanner;
-      await scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 220, height: 220 } },
-        (decodedText) => {
-          onResult(decodedText);
-          stop();
-        },
-        () => { /* ignore scan errors */ }
-      );
-    } catch {
-      setCamError('Não foi possível acessar a câmera. Verifique as permissões do navegador.');
+
+      const scanConfig = { fps: 10, qrbox: { width: 220, height: 220 } };
+      const onScanSuccess = (decodedText) => {
+        onResult(decodedText);
+        stop();
+      };
+      const onScanFailure = () => {
+        /* ignore frame scan errors */
+      };
+
+      // Tenta listar as câmeras disponíveis primeiro
+      let started = false;
+      try {
+        const cameras = await Html5Qrcode.getCameras();
+        if (cameras && cameras.length > 0) {
+          // Prefere câmera traseira no mobile, ou primeira câmera no notebook/desktop
+          const backCam = cameras.find((c) => /back|rear|traseira/i.test(c.label));
+          const targetCamId = backCam ? backCam.id : cameras[0].id;
+          await scanner.start(targetCamId, scanConfig, onScanSuccess, onScanFailure);
+          started = true;
+        }
+      } catch {
+        // Ignora erro de enumeração e tenta diretamente por constraints
+      }
+
+      if (!started) {
+        try {
+          await scanner.start({ facingMode: 'environment' }, scanConfig, onScanSuccess, onScanFailure);
+        } catch {
+          // Fallback para câmera frontal (comum em notebooks/webcams USB)
+          await scanner.start({ facingMode: 'user' }, scanConfig, onScanSuccess, onScanFailure);
+        }
+      }
+    } catch (err) {
+      const msg = String(err?.message || err || '');
+      if (msg.includes('Permission') || msg.includes('NotAllowedError') || msg.includes('permission')) {
+        setCamError('Permissão da câmera negada. Clique no ícone de cadeado/configurações ao lado da URL no navegador para permitir o uso da câmera.');
+      } else if (msg.includes('NotFound') || msg.includes('DevicesNotFoundError')) {
+        setCamError('Nenhuma câmera conectada foi detectada no seu dispositivo.');
+      } else if (msg.includes('NotReadable') || msg.includes('TrackStartError')) {
+        setCamError('A câmera já está em uso por outro programa (Teams, Zoom, Discord, etc). Feche-o e tente novamente.');
+      } else {
+        setCamError(`Erro ao abrir a câmera: ${msg || 'Verifique as permissões do navegador.'}`);
+      }
       setActive(false);
     }
   }, [onResult, stop]);
@@ -567,10 +638,29 @@ const Stepper = () => {
             </div>
 
             {/* Área do QR Code */}
-            <div className="flex flex-col items-center gap-3">
-              {!qr.active ? (
+            <div className="flex flex-col items-center gap-3 w-full">
+              <div
+                className={`w-full relative ${qr.active ? 'block' : 'hidden'}`}
+              >
+                <div
+                  id="qr-reader-element"
+                  className="w-full rounded-3xl overflow-hidden border-2 border-brand-secondary bg-black"
+                  style={{ minHeight: 260 }}
+                />
+                <button
+                  type="button"
+                  onClick={qr.stop}
+                  className="absolute top-3 right-3 z-10 bg-black/70 hover:bg-black text-white rounded-full px-3.5 py-1.5 text-xs font-semibold cursor-pointer shadow transition-colors"
+                  aria-label="Fechar câmera"
+                >
+                  ✕ Fechar
+                </button>
+              </div>
+
+              {!qr.active && (
                 <button
                   id="btn-abrir-camera"
+                  type="button"
                   onClick={qr.start}
                   className="w-full flex flex-col items-center justify-center gap-3 p-6 border-2 border-dashed border-brand-secondary rounded-3xl bg-white cursor-pointer hover:bg-brand-light transition-colors"
                   aria-label="Abrir câmera para ler QR Code"
@@ -581,25 +671,12 @@ const Stepper = () => {
                     <span className="font-normal text-gray-400">Toque para abrir a câmera</span>
                   </span>
                 </button>
-              ) : (
-                <div className="w-full relative">
-                  <div
-                    id="qr-reader-element"
-                    className="w-full rounded-3xl overflow-hidden border-2 border-brand-secondary"
-                    style={{ minHeight: 260 }}
-                  />
-                  <button
-                    onClick={qr.stop}
-                    className="absolute top-3 right-3 bg-black/50 text-white rounded-full px-3 py-1 text-xs font-semibold"
-                    aria-label="Fechar câmera"
-                  >
-                    ✕ Fechar
-                  </button>
-                </div>
               )}
 
               {qr.camError && (
-                <p className="text-red-500 text-sm font-medium" role="alert">{qr.camError}</p>
+                <div className="w-full p-3 bg-red-50 border border-red-200 rounded-2xl text-center">
+                  <p className="text-red-600 text-xs font-medium leading-relaxed" role="alert">{qr.camError}</p>
+                </div>
               )}
             </div>
 
