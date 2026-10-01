@@ -27,5 +27,6 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # Expõe a porta 80 do contêiner
 EXPOSE 80
 
-# Inicia o servidor Nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Inicia gerando o env-config.js em tempo de execução com o valor de API_BASE_URL fornecido ao contêiner
+CMD ["/bin/sh", "-c", "echo \"window.__ENV__ = { API_BASE_URL: '${API_BASE_URL:-https://lavonboarding-simulator-api.onrender.com/api/v1}' };\" > /usr/share/nginx/html/env-config.js && exec nginx -g 'daemon off;'"]
+

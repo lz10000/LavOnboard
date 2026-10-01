@@ -14,7 +14,14 @@ import ligacaoRS485 from '../assets/Ligacao_RS485.png';
 // CONSTANTES
 // ============================================================
 const TOTAL_STEPS = 8;
-const API_BASE = 'http://localhost:3001/api/v1';
+const API_BASE =
+  (typeof window !== 'undefined' && window.__ENV__?.API_BASE_URL) ||
+  import.meta.env.VITE_API_BASE_URL ||
+  'https://lavonboarding-simulator-api.onrender.com/api/v1';
+
+if (typeof window !== 'undefined') {
+  console.log('[LavOnboarding] API_BASE ativa:', API_BASE);
+}
 
 // Normaliza MAC: remove separadores e coloca em XX:XX:XX:XX:XX:XX maiúsculas
 function normalizeMac(raw) {
@@ -178,8 +185,10 @@ function useControllerStatus() {
     setData(null);
 
     const attempt = async () => {
+      const url = `${API_BASE}/controllers/${encodeURIComponent(mac)}/status`;
+      console.log('[API_STATUS] Tentativa', retriesRef.current + 1, 'consultando:', url);
       try {
-        const res = await fetch(`${API_BASE}/controllers/${mac}/status`, {
+        const res = await fetch(url, {
           signal: AbortSignal.timeout(8000),
         });
         if (!res.ok) {
@@ -187,6 +196,7 @@ function useControllerStatus() {
           throw new Error(errData.error || `HTTP ${res.status}`);
         }
         const json = await res.json();
+        console.log('[API_STATUS] Resposta recebida:', json);
 
         // Valida contrato: somente pulse, reboot, available
         if (
@@ -203,6 +213,7 @@ function useControllerStatus() {
           setData(json);
         }
       } catch (err) {
+        console.warn('[API_STATUS] Erro na tentativa:', err.message);
         retriesRef.current += 1;
         if (retriesRef.current >= 4) {
           setStatus('error');
